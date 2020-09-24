@@ -1,4 +1,4 @@
-# go-consumer
+# go-consumer (In Development)
 
 A generic consumer service written in Go
 

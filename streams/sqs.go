@@ -4,6 +4,7 @@ import (
 	"go-consumer/config"
 	"log"
 	"sync"
+	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
@@ -65,6 +66,12 @@ func (s *SQS) Poll(handler func(wg *sync.WaitGroup, msg *sqs.Message)) {
 		for _, msg := range result.Messages {
 			wg.Add(1)
 			go handler(&wg, msg)
+		}
+
+		if env.RunOnce == true {
+			break
+		} else {
+			<-time.After(time.Duration(env.RunInterval) * time.Second)
 		}
 	}
 

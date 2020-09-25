@@ -3,13 +3,13 @@ package main
 import (
 	"fmt"
 	"go-consumer/config"
-	queue "go-consumer/streams"
+	"go-consumer/streams"
 	"sync"
 	"time"
 )
 
 // simulate processing a request for 2 seconds
-func handler(wg *sync.WaitGroup, job queue.SQSJob) {
+func handler(wg *sync.WaitGroup, job streams.SQSJob) {
 	wait := job.ScheduledAt.Sub(time.Now())
 
 	fmt.Println(job.ID, "will run after", wait)
@@ -28,7 +28,7 @@ func main() {
 
 	env := config.Env()
 
-	sqs := queue.NewSQS(env.SQSLimit, env.SQSWaitTime)
+	sqs := streams.NewSQS(env.SQSLimit, env.SQSWaitTime)
 
 	run := func(wg *sync.WaitGroup) {
 		start := time.Now()

@@ -1,64 +1,84 @@
 package streams
 
 import (
-	"fmt"
+	"go-consumer/config"
+	"log"
 	"sync"
-	"time"
-)
 
-// SQSJob The schema representing messages in the queue
-type SQSJob struct {
-	ID          int
-	ScheduledAt time.Time
-}
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/credentials"
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/sqs"
+)
 
 // SQS Wrapper for SQS methods
 type SQS struct {
-	jobs         chan SQSJob
-	Limit        int
-	WaitSeconds  int
-	VerboseLevel int
+	Limit             int64
+	WaitSeconds       int64
+	VisibilityTimeout int64
+	Verbosity         int
+	svc               *sqs.SQS
 }
 
 // SQSOps An interface for SQS operations
 type SQSOps interface {
-	Poll()
-	Read(func(wg *sync.WaitGroup, job SQSJob))
+	Poll(handler func(wg *sync.WaitGroup, msg *sqs.Message))
+	Delete(msg *sqs.Message) error
 }
 
 // NewSQS Initialise a SQS instance
-func NewSQS(limit, waitSeconds int) SQSOps {
-	return &SQS{make(chan SQSJob, limit), limit, waitSeconds, 0}
+func NewSQS() SQSOps {
+	env := config.Env()
+
+	creds := credentials.NewEnvCredentials()
+	awsConfig := aws.NewConfig().WithRegion(env.AWSRegion).WithMaxRetries(10).WithCredentials(creds)
+
+	newSession := session.Must(session.NewSession(awsConfig))
+	svc := sqs.New(newSession)
+
+	limit := env.SQSLimit
+	waitTime := env.SQSWaitTime
+	visibilityTimeout := env.SQSVisibilityTimeout
+	verbosity := 0
+
+	return &SQS{limit, waitTime, visibilityTimeout, verbosity, svc}
 }
 
 // Poll Poll for messages in the SQS
-func (s *SQS) Poll() {
-
-	s.jobs = make(chan SQSJob, s.Limit)
-
-	// Add business logic to poll from SQS here
-	for i := 1; i <= s.Limit; i++ {
-		s.jobs <- SQSJob{
-			i,
-			time.Now().Add(time.Duration(1*i) * time.Second),
-		}
-	}
-	close(s.jobs)
-}
-
-// Read Read from the poll and spawn workers for received messages in a worker group.
-//
-// The caller must write to `done` channel in the `run` fn to mark the successful completion of a request.
-func (s *SQS) Read(run func(wg *sync.WaitGroup, job SQSJob)) {
+func (s *SQS) Poll(handler func(wg *sync.WaitGroup, msg *sqs.Message)) {
+	env := config.Env()
 	wg := sync.WaitGroup{}
 
-	fmt.Println("Listening")
-	for job := range s.jobs {
+	for {
+		result, err := s.svc.ReceiveMessage(&sqs.ReceiveMessageInput{
+			QueueUrl:            &env.SQSURL,
+			MaxNumberOfMessages: &s.Limit,
+			WaitTimeSeconds:     &s.WaitSeconds,
+			VisibilityTimeout:   &s.VisibilityTimeout,
+		})
 
-		fmt.Printf("Adding job %v\n", job)
-		wg.Add(1)
-		go run(&wg, job)
+		if err != nil {
+			log.Fatal(err)
+			break
+		}
+
+		for _, msg := range result.Messages {
+			wg.Add(1)
+			go handler(&wg, msg)
+		}
 	}
 
 	wg.Wait()
+}
+
+// Delete a SQS message from the queue
+func (s *SQS) Delete(msg *sqs.Message) error {
+
+	env := config.Env()
+	_, err := s.svc.DeleteMessage(&sqs.DeleteMessageInput{
+		QueueUrl:      &env.SQSURL,
+		ReceiptHandle: msg.ReceiptHandle,
+	})
+
+	return err
 }

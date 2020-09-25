@@ -2,59 +2,34 @@ package main
 
 import (
 	"fmt"
-	"go-consumer/config"
 	"go-consumer/streams"
 	"sync"
 	"time"
+
+	"github.com/aws/aws-sdk-go/service/sqs"
 )
 
-// simulate processing a request for 2 seconds
-func handler(wg *sync.WaitGroup, job streams.SQSJob) {
-	wait := job.ScheduledAt.Sub(time.Now())
-
-	fmt.Println(job.ID, "will run after", wait)
-	<-time.After(wait)
-
-	fmt.Println("Running", job)
-
-	// Post business logic goes here
-	time.Sleep(2 * time.Second)
-	fmt.Println("Finished ", job)
-
-	wg.Done()
-}
-
 func main() {
+	// Instantiate the queue with service connection
+	queue := streams.NewSQS()
 
-	env := config.Env()
+	// simulate processing a request for 2 seconds
+	handler := func(wg *sync.WaitGroup, msg *sqs.Message) {
+		fmt.Println("Waiting:", *msg.MessageId)
+		wait := time.Duration(1) * time.Second
+		<-time.After(wait)
 
-	sqs := streams.NewSQS(env.SQSLimit, env.SQSWaitTime)
+		fmt.Println("Processing:", *msg.MessageId, *msg.Body)
 
-	run := func(wg *sync.WaitGroup) {
-		start := time.Now()
-		sqs.Poll()
-		sqs.Read(handler)
-		fmt.Println("\nBatch took: ", time.Now().Sub(start))
+		time.Sleep(2 * time.Second)
+		fmt.Println("Finished:", *msg.MessageId)
+
+		err := queue.Delete(msg)
+		fmt.Println("Delete Error:", err)
 
 		wg.Done()
 	}
 
-	wg := sync.WaitGroup{}
-	i := 0
-	for {
-		i++
-		fmt.Println("\nBatch", i, "\n")
-
-		wg.Add(1)
-		go run(&wg)
-
-		if !env.RunOnce {
-			<-time.After(time.Duration(env.RunInterval) * time.Second)
-		} else {
-			break
-		}
-	}
-
-	wg.Wait()
-
+	// Poll from the SQS queue
+	queue.Poll(handler)
 }

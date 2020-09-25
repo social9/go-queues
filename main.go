@@ -2,34 +2,59 @@ package main
 
 import (
 	"fmt"
+	"go-consumer/config"
 	queue "go-consumer/streams"
 	"sync"
 	"time"
 )
 
 // simulate processing a request for 2 seconds
-func run(wg *sync.WaitGroup, job queue.SQSJob) {
+func handler(wg *sync.WaitGroup, job queue.SQSJob) {
 	wait := job.ScheduledAt.Sub(time.Now())
 
 	fmt.Println(job.ID, "will run after", wait)
 	<-time.After(wait)
 
-	fmt.Println("Running ", job.ID, "scheduled at", job.ScheduledAt)
+	fmt.Println("Running", job)
 
 	// Post business logic goes here
 	time.Sleep(2 * time.Second)
-	fmt.Println("Finished Job", job.ID)
+	fmt.Println("Finished ", job)
 
 	wg.Done()
 }
 
 func main() {
 
-	limit, wait := 5, 0
-	sqs := queue.NewSQS(limit, wait)
+	env := config.Env()
 
-	sqs.Poll()
-	sqs.Read(run)
+	sqs := queue.NewSQS(env.SQSLimit, env.SQSWaitTime)
 
-	fmt.Println("Program exited.")
+	run := func(wg *sync.WaitGroup) {
+		start := time.Now()
+		sqs.Poll()
+		sqs.Read(handler)
+		fmt.Println("\nBatch took: ", time.Now().Sub(start))
+
+		wg.Done()
+	}
+
+	wg := sync.WaitGroup{}
+	i := 0
+	for {
+		i++
+		fmt.Println("\nBatch", i, "\n")
+
+		wg.Add(1)
+		go run(&wg)
+
+		if !env.RunOnce {
+			<-time.After(time.Duration(env.RunInterval) * time.Second)
+		} else {
+			break
+		}
+	}
+
+	wg.Wait()
+
 }

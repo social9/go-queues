@@ -1,4 +1,4 @@
-# github.com/cnp96/go-queues (In Development)
+# go-queues (In Development)
 
 A generic producer-consumer service with pluggable queues written in Go
 
@@ -38,9 +38,10 @@ import (
 )
 
 func main() {
+	// Load from .env file
 	env := config.Env()
 
-	// Instantiate the queue with service connection
+	// Instantiate a SQS instance
 	queue, _ := sqs.NewSQS(sqs.SQSConfig{
 		Verbosity: 0,
 

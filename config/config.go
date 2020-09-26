@@ -16,7 +16,7 @@ type Config struct {
 	AWSRegion            string `env:"AWS_REGION" envDefault:"us-east-2"`
 	SQSLimit             int64  `env:"SQS_BATCH_SIZE" envDefault:"10"`
 	SQSWaitTime          int64  `env:"SQS_WAIT_TIME" envDefault:"20"`
-	SQSVisibilityTimeout int64  `env:"SQS_VISIBILITY_TIMEOUT" envDefault:"10"`
+	SQSVisibilityTimeout int64  `env:"SQS_VISIBILITY_TIMEOUT" envDefault:"20"`
 	RunInterval          int    `env:"RUN_INTERVAL" envDefault:"10"`
 	RunOnce              bool   `env:"RUN_ONCE" envDefault:"true"`
 }

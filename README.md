@@ -33,6 +33,9 @@ import (
 )
 
 func main() {
+  // Instantiate the queue with service connection
+	queue := streams.NewSQS()
+
 	// simulate processing a request for 2 seconds and then delete it
 	handler := func(wg *sync.WaitGroup, msg *sqs.Message) {
 		fmt.Println("Waiting:", *msg.MessageId)
@@ -45,13 +48,10 @@ func main() {
 		fmt.Println("Finished:", *msg.MessageId)
 
 		err := queue.Delete(msg)
-		fmt.Println("Delete Error:", err)
+		fmt.Println("DeleteError:", err)
 
 		wg.Done()
 	}
-
-  // Instantiate the queue with service connection
-	queue := streams.NewSQS()
 
 	// Poll from the SQS queue
 	queue.Poll(handler)

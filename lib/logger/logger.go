@@ -1,9 +1,10 @@
 package logger
 
 import (
-	"go-queues/lib"
 	"log"
 	"os"
+
+	"github.com/cnp96/go-queues/lib"
 )
 
 const (

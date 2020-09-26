@@ -16,7 +16,7 @@ type Config struct {
 	AWSSecret            string `env:"AWS_SECRET_ACCESS_KEY" envDefault:""`
 	SQSURL               string `env:"SQS_URL" envDefault:""`
 	AWSRegion            string `env:"AWS_REGION" envDefault:"us-east-2"`
-	SQSLimit             int64  `env:"SQS_BATCH_SIZE" envDefault:"10"`
+	SQSBatchSize         int64  `env:"SQS_BATCH_SIZE" envDefault:"10"`
 	SQSWaitTime          int64  `env:"SQS_WAIT_TIME" envDefault:"20"`
 	SQSVisibilityTimeout int64  `env:"SQS_VISIBILITY_TIMEOUT" envDefault:"20"`
 	RunInterval          int    `env:"RUN_INTERVAL" envDefault:"10"`

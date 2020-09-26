@@ -1,8 +1,8 @@
-# go-consumer (In Development)
+# go-queues (In Development)
 
-A generic consumer service written in Go
+A generic producer-consumer service with pluggable queues written in Go
 
-It is designed to be inherently scalable, apply concurrent processing using goroutines and has pluggable stream sources such as `SQS`, `Kafka`, etc.
+It is designed to be inherently scalable, apply concurrent processing using goroutines and has pluggable queue sources such as `SQS`, `Kafka`, etc.
 
 ## Setup
 
@@ -18,37 +18,67 @@ It is designed to be inherently scalable, apply concurrent processing using goro
   - `RUN_ONCE` : Run the service one-time or in intervals, _(default **true**)_
   - `RUN_INTERVAL` : Run the service in the defined interval, _(default **10 seconds**)_. Works only when `RUN_ONCE` is set to `true`
 
-## Running
+> Note: You can also load the env values from a file named `.env` stored in the root path
+
+## Quick Start
 
 ```go
+
 package main
 
 import (
-	"fmt"
-	"go-consumer/streams"
+	"log"
 	"sync"
 	"time"
 
-	"github.com/aws/aws-sdk-go/service/sqs"
+	"go-queues/config"
+	"go-queues/streams/sqs"
+
+	awsSqs "github.com/aws/aws-sdk-go/service/sqs"
 )
 
 func main() {
-  // Instantiate the queue with service connection
-	queue := streams.NewSQS()
+	env := config.Env()
 
-	// simulate processing a request for 2 seconds and then delete it
-	handler := func(wg *sync.WaitGroup, msg *sqs.Message) {
-		fmt.Println("Waiting:", *msg.MessageId)
+	// Instantiate the queue with service connection
+	queue, _ := sqs.NewSQS(sqs.SQSConfig{
+		Verbosity: 0,
+
+		// aws config
+		AWSRegion:  env.AWSRegion,
+		MaxRetries: 10,
+
+		// aws creds - Env uis updated when provided
+		// Or you can set the following keys your self
+		// AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
+		// Read more about the credential chain [here](https://docs.aws.amazon.com/sdk-for-go/api/aws/credentials/).
+		AWSKey:    env.AWSKey,
+		AWSSecret: env.AWSSecret,
+
+		// sqs config
+		URL:               env.SQSURL,
+		BatchSize:         env.SQSBatchSize,
+		VisibilityTimeout: 120,
+		WaitSeconds:       5,
+
+		// run config
+		RunInterval: 20,
+		RunOnce:     env.RunOnce,
+	})
+
+	// simulate processing a request for 2 seconds
+	handler := func(wg *sync.WaitGroup, msg *awsSqs.Message) {
+		log.Println("Waiting:", *msg.MessageId)
 		wait := time.Duration(1) * time.Second
 		<-time.After(wait)
 
-		fmt.Println("Processing:", *msg.MessageId, *msg.Body)
+		log.Println("Processing:", *msg.MessageId, *msg.Body)
 
 		time.Sleep(2 * time.Second)
-		fmt.Println("Finished:", *msg.MessageId)
+		log.Println("Finished:", *msg.MessageId)
 
 		err := queue.Delete(msg)
-		fmt.Println("DeleteError:", err)
+		log.Println("Delete Error:", err)
 
 		wg.Done()
 	}
@@ -56,6 +86,7 @@ func main() {
 	// Poll from the SQS queue
 	queue.Poll(handler)
 }
+
 
 ```
 

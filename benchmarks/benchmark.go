@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-var n = flag.Int("n", 1e4, "Number of goroutines to create")
+var n = flag.Int("n", 1e5, "Number of goroutines to create")
 
 var ch = make(chan byte)
 var counter = 0

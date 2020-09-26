@@ -2,11 +2,12 @@ package sqs
 
 import (
 	"errors"
-	libLogger "go-queues/lib/logger"
 	"os"
 	"strconv"
 	"sync"
 	"time"
+
+	libLogger "github.com/cnp96/go-queues/lib/logger"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"

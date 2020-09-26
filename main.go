@@ -5,8 +5,8 @@ import (
 	"sync"
 	"time"
 
-	"go-queues/config"
-	"go-queues/streams/sqs"
+	"github.com/cnp96/go-queues/config"
+	"github.com/cnp96/go-queues/streams/sqs"
 
 	awsSqs "github.com/aws/aws-sdk-go/service/sqs"
 )

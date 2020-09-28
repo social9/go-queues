@@ -1,4 +1,4 @@
-module github.com/cnp96/go-queues
+module github.com/social9/go-queues
 
 go 1.14
 
@@ -8,4 +8,4 @@ require (
 	github.com/stretchr/testify v1.6.1 // indirect
 )
 
-replace github.com/cnp96/go-queues => ../go-queues
+replace github.com/social9/go-queues => ../go-queues

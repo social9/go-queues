@@ -4,7 +4,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/cnp96/go-queues/lib"
+	"github.com/social9/go-queues/lib"
 )
 
 const (

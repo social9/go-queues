@@ -33,7 +33,7 @@ func main() {
 
 		// aws creds - Env uis updated when provided
 		// Or you can set the following keys your self `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`
-		// Read more about the credential chain [here](https://docs.aws.amazon.com/sdk-for-go/api/aws/credentials/).
+		// Read more about the credential chain here, https://docs.aws.amazon.com/sdk-for-go/api/aws/credentials/
 		AWSKey:    "<YOUR AWS ACCESS KEY>",
 		AWSSecret: "<YOUR AWS ACCESS SECRET>",
 
@@ -75,15 +75,17 @@ func main() {
 
 - Clone the repo `git clone https://github.com/social9/go-consumer`
 - Configurable environment variables
-  - `AWS_ACCESS_KEY_ID` : AWS Access Key, **Required**
-  - `AWS_SECRET_ACCESS_KEY` : AWS Access Secret, **Required**
-  - `AWS_REGION` : The AWS region to establish service connection, _(default **us-east-2**)_
-  - `SQS_URL` : The SQS endpoint to poll, _(default **""**)_
-  - `SQS_BATCH_SIZE` : The maximum number of messages to receive per request, _(default **10**)_, _(accepted **1-10)**_
-  - `SQS_WAIT_TIME` : The maximum polling wait time in seconds, _(default **20 seconds**)_, _(accepted **0-20)**_
-  - `SQS_VISIBILITY_TIMEOUT` : Visiblity timout for a message after received in seconds, _(default **20 seconds**)_
-  - `RUN_ONCE` : Run the service one-time or in intervals, _(default **true**)_
-  - `RUN_INTERVAL` : Run the service in the defined interval, _(default **10 seconds**)_. Works only when `RUN_ONCE` is set to `true`
+  | Parameter | Description | Required | Default | Allowed |
+  |-----------|-------------|----------|---------|---------|
+  |`AWS_ACCESS_KEY_ID`|AWS Access Key|yes|`""`|`string`|
+  |`AWS_SECRET_ACCESS_KEY`|AWS Access Secret|yes|`""`|`string`|
+  |`AWS_REGION`|The AWS region to establish service connection|`us-east-2`|A valid AWS region|
+  |`SQS_URL`|The SQS endpoint to poll|""|`string`|
+  |`SQS_BATCH_SIZE`|The maximum number of messages to receive per request|`10`|`1-10`|
+  |`SQS_WAIT_TIME`|The maximum polling wait time in seconds|`20`|`0-20`|
+  |`SQS_VISIBILITY_TIMEOUT`|Visiblity timeout for a message after received in seconds|`20`|`0 - 12*60*60`|
+  |`RUN_ONCE`|Run the service one-time or in intervals|`true`|`boolean`|
+  |`RUN_INTERVAL`|Run the service in the defined interval. Works only when `RUN_ONCE` is set to `true`|`10`|`>0`|
 
 > Note: You can also load the env values from a file named `.env` stored in the root path
 

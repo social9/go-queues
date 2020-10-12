@@ -15,8 +15,8 @@ import (
 	"github.com/aws/aws-sdk-go/service/sqs"
 )
 
-// SQSConfig Wrapper for SQSConfig methods
-type SQSConfig struct {
+// Config Wrapper for Config methods
+type Config struct {
 	AWSKey            string
 	AWSSecret         string
 	AWSRegion         string
@@ -28,6 +28,7 @@ type SQSConfig struct {
 	RunInterval       int
 	Verbosity         int
 	MaxRetries        int
+	MaxHandlers       int
 	svc               *sqs.SQS
 	logger            libLogger.Logger
 }
@@ -39,7 +40,7 @@ type SQS interface {
 }
 
 // NewSQS Initialise a SQS instance
-func NewSQS(opts SQSConfig) (SQS, error) {
+func NewSQS(opts Config) (SQS, error) {
 	logger := libLogger.NewLogger(libLogger.Config{Level: opts.Verbosity})
 
 	// Validate parameters
@@ -99,12 +100,12 @@ func NewSQS(opts SQSConfig) (SQS, error) {
 }
 
 // Poll Poll for messages in the SQS
-func (s *SQSConfig) Poll(handler func(wg *sync.WaitGroup, msg *sqs.Message)) {
+func (s *Config) Poll(handler func(wg *sync.WaitGroup, msg *sqs.Message)) {
 	if s.svc == nil {
 		s.logger.Fatal("No service connection")
 	}
+	handlerCount := 0
 	wg := sync.WaitGroup{}
-
 	batch := 0
 
 	for {
@@ -129,11 +130,22 @@ func (s *SQSConfig) Poll(handler func(wg *sync.WaitGroup, msg *sqs.Message)) {
 		} else {
 			logger.Info("Fetched", len(result.Messages), "messages")
 		}
-
 		for _, msg := range result.Messages {
+			handlerCount++
 			wg.Add(1)
 			go handler(&wg, msg)
 			logger.Debug("Spawned handler for", msg.MessageId)
+
+			// Is running at capacity?
+			if s.MaxHandlers > 0 && handlerCount >= s.MaxHandlers {
+				logger.Info("Reached max handlers", handlerCount)
+				// Send all messages back to the queue
+				// --
+				// Since all handlers are busy, let's wait for 30 seconds
+				logger.Info("Going to wait state for 30 seconds")
+				<-time.After(30 * time.Second)
+				break
+			}
 		}
 
 		if s.RunOnce == true {
@@ -143,6 +155,7 @@ func (s *SQSConfig) Poll(handler func(wg *sync.WaitGroup, msg *sqs.Message)) {
 			logger.Info("Waiting for ", s.RunInterval, "seconds before polling for next batch")
 			<-time.After(time.Duration(s.RunInterval) * time.Second)
 		}
+
 		logger.Info("Finished polling")
 	}
 
@@ -150,7 +163,7 @@ func (s *SQSConfig) Poll(handler func(wg *sync.WaitGroup, msg *sqs.Message)) {
 }
 
 // Delete a SQS message from the queue
-func (s *SQSConfig) Delete(msg *sqs.Message) error {
+func (s *Config) Delete(msg *sqs.Message) error {
 
 	_, err := s.svc.DeleteMessage(&sqs.DeleteMessageInput{
 		QueueUrl:      &s.URL,
@@ -160,7 +173,7 @@ func (s *SQSConfig) Delete(msg *sqs.Message) error {
 	return err
 }
 
-func validateOpts(opts SQSConfig) error {
+func validateOpts(opts Config) error {
 	if opts.AWSRegion == "" {
 		return errors.New("AWSRegion is required")
 	}

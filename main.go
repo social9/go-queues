@@ -15,7 +15,7 @@ func main() {
 	env := config.Env()
 
 	// Instantiate the queue with service connection
-	queue, _ := sqs.NewSQS(sqs.SQSConfig{
+	queue, _ := sqs.NewSQS(sqs.Config{
 		Verbosity: 0,
 
 		// aws config
@@ -32,9 +32,10 @@ func main() {
 		VisibilityTimeout: 120,
 		WaitSeconds:       5,
 
-		// run config
+		// misc config
 		RunInterval: 20,
 		RunOnce:     env.RunOnce,
+		MaxHandlers: 10,
 	})
 
 	// simulate processing a request for 2 seconds

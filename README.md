@@ -91,7 +91,12 @@ func main() {
 
 ## Contribution Guidelines
 
-_To be added soon_
+- Fork this repo to your GitHub account
+- You can either create an issue or pick from the existing and seek maintainers' attention before developement
+- Your _Pull Request_ branch must be rebased with the `dev` branch i.e. have a linear history
+- One or more maintainers will review your PR once associated to an issue.
+
+> Do append the issue ID in the pull request title e.g. **Implemented a functionality closes #20** where **20** is the issue number
 
 ## License
 

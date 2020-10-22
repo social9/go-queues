@@ -38,6 +38,7 @@ func main() {
 		RunInterval: 20,
 		RunOnce:     env.RunOnce,
 		MaxHandlers: 10,
+		BusyTimeout: 30,
 	})
 
 	// Simlulate sending the messages in batch

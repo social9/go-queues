@@ -17,25 +17,47 @@ import (
 
 // Config Wrapper for Config methods
 type Config struct {
-	AWSKey            string
-	AWSSecret         string
-	AWSRegion         string
-	URL               string
-	BatchSize         int64
-	WaitSeconds       int64
+	AWSKey    string
+	AWSSecret string
+	AWSRegion string
+
+	// Poll from this SQS URL
+	URL string
+
+	// Maximum number of time to attempt AWS service connection
+	MaxRetries int
+
+	// Maximum number to retrieve of messages per batch
+	BatchSize int64
+
+	// The maximum poll time (0 <= 20)
+	WaitSeconds int64
+
+	// Once received a consumer, the maximum time in seconds till others can see this message
 	VisibilityTimeout int64
-	RunOnce           bool
-	RunInterval       int
-	Verbosity         int
-	MaxRetries        int
-	MaxHandlers       int
-	svc               *sqs.SQS
-	logger            libLogger.Logger
+
+	// Poll only once
+	RunOnce bool
+
+	// Poll every X seconds defined by this value
+	RunInterval int
+
+	// 0-5 : debug, info, warn, error, fatal
+	Verbosity int
+
+	// Maximum number of handlers to spawn
+	MaxHandlers int
+
+	// BusyTimeout in seconds
+	BusyTimeout int
+
+	svc    *sqs.SQS
+	logger libLogger.Logger
 }
 
 // SQS An interface for SQS operations
 type SQS interface {
-	Poll(handler func(wg *sync.WaitGroup, msg *sqs.Message))
+	Poll(processMsg func(wg *sync.WaitGroup, msg *sqs.Message))
 	Delete(msg *sqs.Message) error
 	Enqueue(msgBatch []*sqs.SendMessageBatchRequestEntry) error
 }
@@ -100,8 +122,10 @@ func NewSQS(opts Config) (SQS, error) {
 	return &opts, nil
 }
 
-// Poll Poll for messages in the SQS
-func (s *Config) Poll(handler func(wg *sync.WaitGroup, msg *sqs.Message)) {
+// Poll for messages in the queue
+//
+// processMsg -- this is called for each message retrieved
+func (s *Config) Poll(processMsg func(wg *sync.WaitGroup, msg *sqs.Message)) {
 	if s.svc == nil {
 		s.logger.Fatal("No service connection")
 	}
@@ -114,43 +138,51 @@ func (s *Config) Poll(handler func(wg *sync.WaitGroup, msg *sqs.Message)) {
 		logger := s.logger.Child(libLogger.Config{Name: "batch-" + strconv.Itoa(batch)})
 
 		logger.Info("Start receiving messages")
+
+		maxMsgs := s.BatchSize
+		// Is running at capacity?
+		if s.MaxHandlers > 0 && handlerCount >= s.MaxHandlers {
+			logger.Info("Running at full capacity with ", handlerCount, "handlers")
+
+			// Since all handlers are busy, let's wait for BusyTimeout seconds
+			logger.Info("Going to wait state for", s.BusyTimeout, "seconds")
+			<-time.After(time.Duration(s.BusyTimeout) * time.Second)
+			continue
+		} else {
+			maxMsgs = int64(s.MaxHandlers - handlerCount)
+			logger.Info("Can accept a maximum of ", maxMsgs, "messages")
+		}
+
 		result, err := s.svc.ReceiveMessage(&sqs.ReceiveMessageInput{
 			QueueUrl:            &s.URL,
-			MaxNumberOfMessages: &s.BatchSize,
+			MaxNumberOfMessages: &maxMsgs,
 			WaitTimeSeconds:     &s.WaitSeconds,
 			VisibilityTimeout:   &s.VisibilityTimeout,
 		})
 
+		// Retrieve error?
 		if err != nil {
 			logger.Error("ReceiveMessageError:", err)
 			break
 		}
 
+		// Message log
 		if len(result.Messages) == 0 {
 			logger.Info("Queue is empty")
 		} else {
 			logger.Info("Fetched", len(result.Messages), "messages")
 		}
+
+		// Process messages
 		for _, msg := range result.Messages {
 			handlerCount++
 			wg.Add(1)
-			go handler(&wg, msg)
+			go processMsg(&wg, msg)
 			logger.Debug("Spawned handler for", msg.MessageId)
-
-			// Is running at capacity?
-			if s.MaxHandlers > 0 && handlerCount >= s.MaxHandlers {
-				logger.Info("Reached max handlers", handlerCount)
-				// Send all messages back to the queue
-				// --
-				// Since all handlers are busy, let's wait for 30 seconds
-				logger.Info("Going to wait state for 30 seconds")
-				<-time.After(30 * time.Second)
-				break
-			}
 		}
 
 		if s.RunOnce == true {
-			logger.Info(`Exiting since RUN_ONCE is set to "true"`)
+			logger.Info(`Exiting since confugured to run once`)
 			break
 		} else {
 			logger.Info("Waiting for ", s.RunInterval, "seconds before polling for next batch")

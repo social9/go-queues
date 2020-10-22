@@ -41,7 +41,7 @@ func main() {
 	})
 
 	// Simlulate sending the messages in batch
-	queue.Enque(SendMessageBatch())
+	queue.Enqueue(EnqueueMsgs())
 
 	// simulate processing a request for 2 seconds
 	handler := func(wg *sync.WaitGroup, msg *awsSqs.Message) {
@@ -64,8 +64,8 @@ func main() {
 	queue.Poll(handler)
 }
 
-// SendMessageBatch - Simlulate sending the messages in batch
-func SendMessageBatch() []*awsSqs.SendMessageBatchRequestEntry {
+// EnqueueMsgs - Simlulate sending the messages in batch
+func EnqueueMsgs() []*awsSqs.SendMessageBatchRequestEntry {
 	msgs := []string{"Test message 1", "Test Message 2", "Test Message 3"}
 
 	var msgBatch []*awsSqs.SendMessageBatchRequestEntry

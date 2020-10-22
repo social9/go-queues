@@ -37,7 +37,7 @@ type Config struct {
 type SQS interface {
 	Poll(handler func(wg *sync.WaitGroup, msg *sqs.Message))
 	Delete(msg *sqs.Message) error
-	Enque(msgBatch []*sqs.SendMessageBatchRequestEntry) error
+	Enqueue(msgBatch []*sqs.SendMessageBatchRequestEntry) error
 }
 
 // NewSQS Initialise a SQS instance
@@ -163,8 +163,8 @@ func (s *Config) Poll(handler func(wg *sync.WaitGroup, msg *sqs.Message)) {
 	wg.Wait()
 }
 
-// SendBatch messages to SQS
-func (s *Config) Enque(msgBatch []*sqs.SendMessageBatchRequestEntry) error {
+// Enqueue messages to SQS
+func (s *Config) Enqueue(msgBatch []*sqs.SendMessageBatchRequestEntry) error {
 	if s.svc == nil {
 		s.logger.Fatal("No service connection")
 	}

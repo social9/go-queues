@@ -2,12 +2,14 @@ package main
 
 import (
 	"log"
+	"strconv"
 	"sync"
 	"time"
 
 	"github.com/social9/go-queues/config"
 	"github.com/social9/go-queues/streams/sqs"
 
+	"github.com/aws/aws-sdk-go/aws"
 	awsSqs "github.com/aws/aws-sdk-go/service/sqs"
 )
 
@@ -38,6 +40,9 @@ func main() {
 		MaxHandlers: 10,
 	})
 
+	// Simlulate sending the messages in batch
+	queue.Enque(SendMessageBatch())
+
 	// simulate processing a request for 2 seconds
 	handler := func(wg *sync.WaitGroup, msg *awsSqs.Message) {
 		log.Println("Waiting:", *msg.MessageId)
@@ -57,4 +62,22 @@ func main() {
 
 	// Poll from the SQS queue
 	queue.Poll(handler)
+}
+
+// SendMessageBatch - Simlulate sending the messages in batch
+func SendMessageBatch() []*awsSqs.SendMessageBatchRequestEntry {
+	msgs := []string{"Test message 1", "Test Message 2", "Test Message 3"}
+
+	var msgBatch []*awsSqs.SendMessageBatchRequestEntry
+	for i := 0; i < len(msgs); i++ {
+		message := &awsSqs.SendMessageBatchRequestEntry{
+			Id:                     aws.String(`test_` + strconv.Itoa(i)),
+			MessageBody:            aws.String(msgs[i]),
+			MessageDeduplicationId: aws.String(`dedup_` + strconv.Itoa(i)),
+			MessageGroupId:         aws.String("test_group"),
+		}
+		msgBatch = append(msgBatch, message)
+	}
+
+	return msgBatch
 }

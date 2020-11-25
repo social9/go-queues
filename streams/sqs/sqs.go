@@ -53,13 +53,18 @@ type Config struct {
 
 	svc    *sqs.SQS
 	logger libLogger.Logger
+
+	// First class function register poll handler
+	PollHandler func(wg *sync.WaitGroup, msg *sqs.Message)
 }
 
 // SQS An interface for SQS operations
 type SQS interface {
-	Poll(processMsg func(wg *sync.WaitGroup, msg *sqs.Message))
+	Poll()
 	Delete(msg *sqs.Message) error
 	Enqueue(msgBatch []*sqs.SendMessageBatchRequestEntry) error
+	RegisterPollHandler(pollHandler func(wg *sync.WaitGroup, msg *sqs.Message))
+	ChangeVisibilityTimeout(msg *sqs.Message, seconds int64) bool
 }
 
 // NewSQS Initialise a SQS instance
@@ -123,9 +128,7 @@ func NewSQS(opts Config) (SQS, error) {
 }
 
 // Poll for messages in the queue
-//
-// processMsg -- this is called for each message retrieved
-func (s *Config) Poll(processMsg func(wg *sync.WaitGroup, msg *sqs.Message)) {
+func (s *Config) Poll() {
 	if s.svc == nil {
 		s.logger.Fatal("No service connection")
 	}
@@ -177,7 +180,12 @@ func (s *Config) Poll(processMsg func(wg *sync.WaitGroup, msg *sqs.Message)) {
 		for _, msg := range result.Messages {
 			handlerCount++
 			wg.Add(1)
-			go processMsg(&wg, msg)
+			if s.PollHandler == nil {
+				logger.Error("No Poll handler registered. Register a handler for custom handling")
+			} else {
+				go s.PollHandler(&wg, msg)
+			}
+
 			logger.Debug("Spawned handler for", msg.MessageId)
 		}
 
@@ -223,6 +231,42 @@ func (s *Config) Delete(msg *sqs.Message) error {
 	})
 
 	return err
+}
+
+// RegisterPollHandler : A method to register a custom Poll Handling method
+func (s *Config) RegisterPollHandler(pollHandler func(wg *sync.WaitGroup, msg *sqs.Message)) {
+	s.PollHandler = pollHandler
+}
+
+// ChangeVisibilityTimeout : Method to change visibility timeout of a message.
+func (s *Config) ChangeVisibilityTimeout(msg *sqs.Message, seconds int64) bool {
+	retVal := false
+	s.logger.Info("ChangeVisibilityTimeout : ", sqs.Message.String(*msg))
+
+	if s.svc == nil {
+		s.logger.Fatal("SQS Connection failed")
+		return retVal
+	}
+
+	strURL := &s.URL
+	receiptHandle := *msg.ReceiptHandle
+
+	changeMessageVisibilityInput := sqs.ChangeMessageVisibilityInput{}
+
+	changeMessageVisibilityInput.SetQueueUrl(*strURL)
+	changeMessageVisibilityInput.SetReceiptHandle(receiptHandle)
+	changeMessageVisibilityInput.SetVisibilityTimeout(seconds)
+
+	out, err := s.svc.ChangeMessageVisibility(&changeMessageVisibilityInput)
+
+	if err != nil {
+		s.logger.Fatal("Change visibility timeout failed", (*out).GoString())
+	} else {
+		s.logger.Info(" Return :", (*out).GoString())
+		retVal = true
+	}
+
+	return retVal
 }
 
 func validateOpts(opts Config) error {

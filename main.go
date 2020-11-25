@@ -45,29 +45,33 @@ func main() {
 	queue.Enqueue(EnqueueMsgs())
 
 	// simulate processing a request for 2 seconds
-	handler := func(wg *sync.WaitGroup, msg *awsSqs.Message) {
+	queue.RegisterPollHandler(func(wg *sync.WaitGroup, msg *awsSqs.Message) {
 		log.Println("Waiting:", *msg.MessageId)
-		wait := time.Duration(1) * time.Second
+		wait := time.Duration(2) * time.Second
 		<-time.After(wait)
 
 		log.Println("Processing:", *msg.MessageId, *msg.Body)
 
-		time.Sleep(2 * time.Second)
+		time.Sleep(60 * time.Second) // Processing time 60 seconds
 		log.Println("Finished:", *msg.MessageId)
 
-		err := queue.Delete(msg)
-		log.Println("Delete Error:", err)
+		queue.ChangeVisibilityTimeout(msg, 0) // Shall comeback to the queue
+
+		// err := queue.Delete(msg)
+		// log.Println("Delete Error:", err)
 
 		wg.Done()
-	}
-
+	},
+	)
+	time.Sleep(60 * time.Second) // wait, go to console and see if there are some messages visible, Hit "Poll for messages"
 	// Poll from the SQS queue
-	queue.Poll(handler)
+	queue.Poll()
+
 }
 
 // EnqueueMsgs - Simlulate sending the messages in batch
 func EnqueueMsgs() []*awsSqs.SendMessageBatchRequestEntry {
-	msgs := []string{"Test message 1", "Test Message 2", "Test Message 3"}
+	msgs := []string{"Test message 1-1", "Test Message 2-1", "Test Message 3-1"}
 
 	var msgBatch []*awsSqs.SendMessageBatchRequestEntry
 	for i := 0; i < len(msgs); i++ {

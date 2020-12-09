@@ -51,11 +51,10 @@ type Config struct {
 	// BusyTimeout in seconds
 	BusyTimeout int
 
-	svc    *sqs.SQS
-	logger libLogger.Logger
-
-	// First class function register poll handler
-	PollHandler func(wg *sync.WaitGroup, msg *sqs.Message)
+	svc          *sqs.SQS
+	logger       libLogger.Logger
+	handlerCount int
+	pollHandler  func(msg *sqs.Message)
 }
 
 // SQS An interface for SQS operations
@@ -63,7 +62,7 @@ type SQS interface {
 	Poll()
 	Delete(msg *sqs.Message) error
 	Enqueue(msgBatch []*sqs.SendMessageBatchRequestEntry) error
-	RegisterPollHandler(pollHandler func(wg *sync.WaitGroup, msg *sqs.Message))
+	RegisterPollHandler(pollHandler func(msg *sqs.Message))
 	ChangeVisibilityTimeout(msg *sqs.Message, seconds int64) bool
 }
 
@@ -132,7 +131,7 @@ func (s *Config) Poll() {
 	if s.svc == nil {
 		s.logger.Fatal("No service connection")
 	}
-	handlerCount := 0
+
 	wg := sync.WaitGroup{}
 	batch := 0
 
@@ -144,15 +143,15 @@ func (s *Config) Poll() {
 
 		maxMsgs := s.BatchSize
 		// Is running at capacity?
-		if s.MaxHandlers > 0 && handlerCount >= s.MaxHandlers {
-			logger.Info("Running at full capacity with ", handlerCount, "handlers")
+		if s.MaxHandlers > 0 && s.handlerCount >= s.MaxHandlers {
+			logger.Info("Running at full capacity with ", s.handlerCount, "handlers")
 
 			// Since all handlers are busy, let's wait for BusyTimeout seconds
 			logger.Info("Going to wait state for", s.BusyTimeout, "seconds")
 			<-time.After(time.Duration(s.BusyTimeout) * time.Second)
 			continue
 		} else {
-			maxMsgs = int64(s.MaxHandlers - handlerCount)
+			maxMsgs = int64(s.MaxHandlers - s.handlerCount)
 			logger.Info("Can accept a maximum of ", maxMsgs, "messages")
 		}
 
@@ -178,12 +177,17 @@ func (s *Config) Poll() {
 
 		// Process messages
 		for _, msg := range result.Messages {
-			handlerCount++
-			wg.Add(1)
-			if s.PollHandler == nil {
+			if s.pollHandler == nil {
 				logger.Error("No Poll handler registered. Register a handler for custom handling")
 			} else {
-				go s.PollHandler(&wg, msg)
+				s.handlerCount++
+				wg.Add(1)
+
+				go func(w *sync.WaitGroup, inst *Config) {
+					inst.pollHandler(msg)
+					w.Done()
+					inst.handlerCount--
+				}(&wg, s)
 			}
 
 			logger.Debug("Spawned handler for", msg.MessageId)
@@ -234,8 +238,8 @@ func (s *Config) Delete(msg *sqs.Message) error {
 }
 
 // RegisterPollHandler : A method to register a custom Poll Handling method
-func (s *Config) RegisterPollHandler(pollHandler func(wg *sync.WaitGroup, msg *sqs.Message)) {
-	s.PollHandler = pollHandler
+func (s *Config) RegisterPollHandler(pollHandler func(msg *sqs.Message)) {
+	s.pollHandler = pollHandler
 }
 
 // ChangeVisibilityTimeout : Method to change visibility timeout of a message.

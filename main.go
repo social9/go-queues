@@ -3,7 +3,6 @@ package main
 import (
 	"log"
 	"strconv"
-	"sync"
 	"time"
 
 	"github.com/social9/go-queues/config"
@@ -45,7 +44,7 @@ func main() {
 	queue.Enqueue(EnqueueMsgs())
 
 	// simulate processing a request for 2 seconds
-	queue.RegisterPollHandler(func(wg *sync.WaitGroup, msg *awsSqs.Message) {
+	queue.RegisterPollHandler(func(msg *awsSqs.Message) {
 		log.Println("Waiting:", *msg.MessageId)
 		wait := time.Duration(2) * time.Second
 		<-time.After(wait)
@@ -59,8 +58,6 @@ func main() {
 
 		// err := queue.Delete(msg)
 		// log.Println("Delete Error:", err)
-
-		wg.Done()
 	},
 	)
 	time.Sleep(60 * time.Second) // wait, go to console and see if there are some messages visible, Hit "Poll for messages"

@@ -7,35 +7,31 @@ It is designed to be inherently scalable, apply concurrent processing using goro
 ## Quick Start
 
 ```go
-
 package main
 
 import (
 	"log"
-	"sync"
+	"strconv"
 	"time"
 
-	"github.com/social9/go-queues/config"
 	"github.com/social9/go-queues/streams/sqs"
 
+	"github.com/aws/aws-sdk-go/aws"
 	awsSqs "github.com/aws/aws-sdk-go/service/sqs"
 )
 
 func main() {
-
-	// Instantiate a SQS instance
-	queue, _ := sqs.NewSQS(sqs.SQSConfig{
+	// Instantiate the queue with service connection
+	queue, _ := sqs.NewSQS(sqs.Config{
 		Verbosity: 0,
 
 		// aws config
 		AWSRegion:  "us-east-2",
 		MaxRetries: 10,
 
-		// aws creds - Env uis updated when provided
-		// Or you can set the following keys your self `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`
-		// Read more about the credential chain here, https://docs.aws.amazon.com/sdk-for-go/api/aws/credentials/
-		AWSKey:    "<YOUR AWS ACCESS KEY>",
-		AWSSecret: "<YOUR AWS ACCESS SECRET>",
+		// aws creds - if provided, env is temporarily updated. Or you can add to env yourself
+		AWSKey:    "...",
+		AWSSecret: "...",
 
 		// sqs config
 		URL:               "https://sqs.us-east-2.amazonaws.com/1234567/MyQueue.fifo",
@@ -43,30 +39,55 @@ func main() {
 		VisibilityTimeout: 120,
 		WaitSeconds:       5,
 
-		// run config
+		// misc config
 		RunInterval: 20,
-		RunOnce:     true,
+		RunOnce:     env.RunOnce,
+		MaxHandlers: 10,
+		BusyTimeout: 30,
 	})
 
-	// simulate processing a request for 2 seconds
-	handler := func(wg *sync.WaitGroup, msg *awsSqs.Message) {
+	// Simlulate sending the messages in batch
+	queue.Enqueue(EnqueueMsgs())
 
+	// simulate processing a request for 2 seconds
+	queue.RegisterPollHandler(func(msg *awsSqs.Message) {
 		log.Println("Waiting:", *msg.MessageId)
-		wait := time.Duration(1) * time.Second
+		wait := time.Duration(2) * time.Second
 		<-time.After(wait)
 
 		log.Println("Processing:", *msg.MessageId, *msg.Body)
-		time.Sleep(2 * time.Second)
+
+		time.Sleep(60 * time.Second) // Processing time 60 seconds
 		log.Println("Finished:", *msg.MessageId)
 
-		err := queue.Delete(msg)
-		log.Println("Delete Error:", err)
+		queue.ChangeVisibilityTimeout(msg, 0) // Shall comeback to the queue
 
-		wg.Done()
+		// err := queue.Delete(msg)
+		// log.Println("Delete Error:", err)
+	},
+	)
+	time.Sleep(60 * time.Second) // wait, go to console and see if there are some messages visible, Hit "Poll for messages"
+	// Poll from the SQS queue
+	queue.Poll()
+
+}
+
+// EnqueueMsgs - Simlulate sending the messages in batch
+func EnqueueMsgs() []*awsSqs.SendMessageBatchRequestEntry {
+	msgs := []string{"Test message 1-1", "Test Message 2-1", "Test Message 3-1"}
+
+	var msgBatch []*awsSqs.SendMessageBatchRequestEntry
+	for i := 0; i < len(msgs); i++ {
+		message := &awsSqs.SendMessageBatchRequestEntry{
+			Id:                     aws.String(`test_` + strconv.Itoa(i)),
+			MessageBody:            aws.String(msgs[i]),
+			MessageDeduplicationId: aws.String(`dedup_` + strconv.Itoa(i)),
+			MessageGroupId:         aws.String("test_group"),
+		}
+		msgBatch = append(msgBatch, message)
 	}
 
-	// Poll from the SQS queue
-	queue.Poll(handler)
+	return msgBatch
 }
 
 ```

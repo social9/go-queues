@@ -1,4 +1,16 @@
-# go-queues (In Development)
+<p align="center">
+  <a href="https://pkg.go.dev/github.com/social9/go-queues/?tab=doc">
+    <img src="https://img.shields.io/badge/%F0%9F%93%9A%20godoc-pkg-00ACD7.svg?color=00ACD7&style=flat">
+  </a>
+  <a href="https://goreportcard.com/report/github.com/social9/go-queues">
+    <img src="https://img.shields.io/badge/%F0%9F%93%9D%20goreport-A%2B-75C46B">
+  </a>
+  <a href="https://gocover.io/github.com/social9/go-queues">
+    <img src="https://img.shields.io/badge/coverage-0%25-orange">
+  </a>
+</p>
+
+# go-queues
 
 A generic producer-consumer service with pluggable queues written in Go
 

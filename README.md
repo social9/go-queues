@@ -106,7 +106,7 @@ func EnqueueMsgs() []*awsSqs.SendMessageBatchRequestEntry {
 
 ## Setup
 
-- Clone the repo `git clone https://github.com/social9/go-consumer`
+- Clone the repo `git clone https://github.com/social9/go-queues`
 - Configurable environment variables
   | Parameter              | Description  | Default | Allowed |
   |------------------------|--------------|---------|---------|

@@ -2,9 +2,9 @@ package sqs
 
 import (
 	"errors"
+	"fmt"
 	"log"
 	"os"
-	"strconv"
 	"sync"
 	"time"
 
@@ -15,9 +15,10 @@ import (
 )
 
 var logger *log.Logger
+var logPrefix = "(gq-sqs) "
 
 func init() {
-	logger = log.New(os.Stdout, "(gq-sqs)", log.Lshortfile)
+	logger = log.New(os.Stdout, logPrefix, log.Ldate|log.Lshortfile)
 }
 
 // Config Wrapper for Config methods
@@ -135,14 +136,14 @@ func (s *Config) Poll() {
 
 	for {
 		batch++
-		childLogger := log.New(os.Stdout, "(gq-sqs) batch-"+strconv.Itoa(batch), log.Lshortfile)
+		childLogger := log.New(os.Stdout, fmt.Sprintf("%sbatch-%d ", logPrefix, batch), log.Ldate|log.Lshortfile)
 
 		childLogger.Println("Start receiving messages")
 
 		maxMsgs := s.BatchSize
 		// Is running at capacity?
 		if s.MaxHandlers > 0 && s.handlerCount >= s.MaxHandlers {
-			childLogger.Printf("Running at full capacity with %d handlers", s.handlerCount)
+			childLogger.Println("Reached max handler count")
 
 			// Since all handlers are busy, let's wait for BusyTimeout seconds
 			childLogger.Printf("Going to wait state for %d seconds", s.BusyTimeout)
@@ -150,7 +151,7 @@ func (s *Config) Poll() {
 			continue
 		} else {
 			maxMsgs = int64(s.MaxHandlers - s.handlerCount)
-			childLogger.Printf("Can accept a maximum of %d messages", maxMsgs)
+			childLogger.Printf("Polling for a maximum of %d messages", maxMsgs)
 		}
 
 		result, err := s.svc.ReceiveMessage(&sqs.ReceiveMessageInput{
@@ -181,11 +182,11 @@ func (s *Config) Poll() {
 				s.handlerCount++
 				wg.Add(1)
 
-				go func(w *sync.WaitGroup, inst *Config) {
-					inst.pollHandler(msg)
-					w.Done()
-					inst.handlerCount--
-				}(&wg, s)
+				go func(m *sqs.Message) {
+					s.pollHandler(m)
+					wg.Done()
+					s.handlerCount--
+				}(&(*msg))
 			}
 
 			childLogger.Printf("Spawned handler for %s", *msg.MessageId)
@@ -211,22 +212,21 @@ func (s *Config) Enqueue(msgBatch []*sqs.SendMessageBatchRequestEntry) error {
 		logger.Fatal("No service connection")
 	}
 
-	logger.Printf(`%d messages are processing`, len(msgBatch))
+	logger.Printf(`Enqueuing %d messages`, len(msgBatch))
 
 	result, err := s.svc.SendMessageBatch(&sqs.SendMessageBatchInput{
 		QueueUrl: &s.URL,
 		Entries:  msgBatch,
 	})
 
-	logger.Printf("%d: Successfully Processed", len(result.Successful))
-	logger.Printf("%d: Failed to process", len(result.Failed))
-
+	logger.Printf("Enque result: %d success, %d failed", len(result.Successful), len(result.Failed))
 	return err
 }
 
 // Delete a SQS message from the queue
 func (s *Config) Delete(msg *sqs.Message) error {
 
+	logger.Printf("Delete message with ID %s", *msg.MessageId)
 	_, err := s.svc.DeleteMessage(&sqs.DeleteMessageInput{
 		QueueUrl:      &s.URL,
 		ReceiptHandle: msg.ReceiptHandle,
@@ -259,13 +259,13 @@ func (s *Config) ChangeVisibilityTimeout(msg *sqs.Message, seconds int64) bool {
 	changeMessageVisibilityInput.SetReceiptHandle(receiptHandle)
 	changeMessageVisibilityInput.SetVisibilityTimeout(seconds)
 
-	out, err := s.svc.ChangeMessageVisibility(&changeMessageVisibilityInput)
+	_, err := s.svc.ChangeMessageVisibility(&changeMessageVisibilityInput)
 
 	if err == nil {
-		logger.Printf("changed visibility timeout success for %s", (*out).GoString())
+		logger.Printf("changed visibility timeout success for %s", *msg.MessageId)
 		retVal = true
 	} else {
-		logger.Printf("change visibility timeout failed: %s", (*out).GoString())
+		logger.Printf("change visibility timeout failed for %s", *msg.MessageId)
 	}
 
 	return retVal

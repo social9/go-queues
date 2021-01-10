@@ -18,7 +18,7 @@ var logger *log.Logger
 var logPrefix = "(gq-sqs) "
 
 func init() {
-	logger = log.New(os.Stdout, logPrefix, log.Ldate|log.Lshortfile)
+	logger = log.New(os.Stdout, logPrefix, log.LstdFlags|log.Lshortfile)
 }
 
 // Config Wrapper for Config methods
@@ -136,7 +136,7 @@ func (s *Config) Poll() {
 
 	for {
 		batch++
-		childLogger := log.New(os.Stdout, fmt.Sprintf("%sbatch-%d ", logPrefix, batch), log.Ldate|log.Lshortfile)
+		childLogger := log.New(os.Stdout, fmt.Sprintf("%sbatch-%d ", logPrefix, batch), log.LstdFlags|log.Lshortfile)
 
 		childLogger.Println("Start receiving messages")
 

@@ -30,7 +30,7 @@ func init() {
 	once.Do(func() {
 		instance = Config{}
 
-		loadFromEnvFile(".env")
+		LoadFromEnvFile(".env")
 		if err := env.Parse(&instance); err != nil {
 			log.Fatal(err)
 		} else {
@@ -40,7 +40,8 @@ func init() {
 	})
 }
 
-func loadFromEnvFile(file string) {
+// LoadFromEnvFile loads env values from a .env file
+func LoadFromEnvFile(file string) {
 	envFile, err := ioutil.ReadFile(file)
 	if err == nil {
 		formatted := strings.Split(string(envFile), "\n")

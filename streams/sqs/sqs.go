@@ -2,18 +2,23 @@ package sqs
 
 import (
 	"errors"
+	"log"
 	"os"
 	"strconv"
 	"sync"
 	"time"
-
-	libLogger "github.com/social9/go-queues/lib/logger"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/sqs"
 )
+
+var logger *log.Logger
+
+func init() {
+	logger = log.New(os.Stdout, "(gq-sqs)", log.Lshortfile)
+}
 
 // Config Wrapper for Config methods
 type Config struct {
@@ -27,32 +32,28 @@ type Config struct {
 	// Maximum number of time to attempt AWS service connection
 	MaxRetries int
 
-	// Maximum number to retrieve of messages per batch
+	// Maximum number of messages to retrieve per batch
 	BatchSize int64
 
 	// The maximum poll time (0 <= 20)
 	WaitSeconds int64
 
-	// Once received a consumer, the maximum time in seconds till others can see this message
+	// Once a message is received by a consumer, the maximum time in seconds till others can see this
 	VisibilityTimeout int64
 
-	// Poll only once
+	// Poll only once and exit
 	RunOnce bool
 
 	// Poll every X seconds defined by this value
 	RunInterval int
 
-	// 0-5 : debug, info, warn, error, fatal
-	Verbosity int
-
-	// Maximum number of handlers to spawn
+	// Maximum number of handlers to spawn for batch processing
 	MaxHandlers int
 
 	// BusyTimeout in seconds
 	BusyTimeout int
 
 	svc          *sqs.SQS
-	logger       libLogger.Logger
 	handlerCount int
 	pollHandler  func(msg *sqs.Message)
 }
@@ -66,14 +67,12 @@ type SQS interface {
 	ChangeVisibilityTimeout(msg *sqs.Message, seconds int64) bool
 }
 
-// NewSQS Initialise a SQS instance
+// NewSQS Instantiate a SQS instance
 func NewSQS(opts Config) (SQS, error) {
-	logger := libLogger.NewLogger(libLogger.Config{Level: opts.Verbosity})
-
 	// Validate parameters
 	validateErr := validateOpts(opts)
 	if validateErr != nil {
-		logger.Debug(validateErr)
+		logger.Println(validateErr)
 		return nil, validateErr
 	}
 
@@ -87,41 +86,40 @@ func NewSQS(opts Config) (SQS, error) {
 
 	creds := credentials.NewEnvCredentials()
 	if _, err := creds.Get(); err != nil {
-		logger.Debug("Creds error", err)
+		logger.Println("AWS Credential error", err)
 		return nil, errors.New("Invalid AWS credentials. Please make sure that `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` is present in the env")
 	}
 
 	// Create AWS Config
 	awsConfig := aws.NewConfig().WithRegion(opts.AWSRegion).WithMaxRetries(opts.MaxRetries).WithCredentials(creds)
 	if awsConfig == nil {
-		logger.Debug("Invalid AWS Config")
+		logger.Println("Invalid AWS Config")
 		return nil, errors.New("Something is wrong with your AWS config parameters")
 	}
 
 	// Establish a session
 	newSession := session.Must(session.NewSession(awsConfig))
 	if newSession == nil {
-		logger.Debug("Unable to create session")
+		logger.Println("Unable to create session")
 		return nil, errors.New("Unable to create session")
 	}
 
 	// Create a service connection
 	svc := sqs.New(newSession)
 	if svc == nil {
-		logger.Debug("Unable to connect to SQS")
+		logger.Println("Unable to connect to SQS")
 		return nil, errors.New("Unable to create a service connection with AWS SQS")
 	}
 
-	logger.Info("Fetching queue attributes")
+	logger.Println("Fetching queue attributes")
 	if _, err := svc.GetQueueAttributes(&sqs.GetQueueAttributesInput{
 		QueueUrl: &opts.URL,
 	}); err != nil {
-		logger.Debug("Unable to fetch queue attributes", err)
+		logger.Println("Unable to fetch queue attributes", err)
 		return nil, errors.New("Unable to get queue attributes")
 	}
-	logger.Info("Connected to Queue")
+	logger.Println("Connected to Queue")
 
-	opts.logger = logger
 	opts.svc = svc
 	return &opts, nil
 }
@@ -129,7 +127,7 @@ func NewSQS(opts Config) (SQS, error) {
 // Poll for messages in the queue
 func (s *Config) Poll() {
 	if s.svc == nil {
-		s.logger.Fatal("No service connection")
+		logger.Fatalln("No service connection")
 	}
 
 	wg := sync.WaitGroup{}
@@ -137,22 +135,22 @@ func (s *Config) Poll() {
 
 	for {
 		batch++
-		logger := s.logger.Child(libLogger.Config{Name: "batch-" + strconv.Itoa(batch)})
+		childLogger := log.New(os.Stdout, "(gq-sqs) batch-"+strconv.Itoa(batch), log.Lshortfile)
 
-		logger.Info("Start receiving messages")
+		childLogger.Println("Start receiving messages")
 
 		maxMsgs := s.BatchSize
 		// Is running at capacity?
 		if s.MaxHandlers > 0 && s.handlerCount >= s.MaxHandlers {
-			logger.Info("Running at full capacity with ", s.handlerCount, "handlers")
+			childLogger.Printf("Running at full capacity with %d handlers", s.handlerCount)
 
 			// Since all handlers are busy, let's wait for BusyTimeout seconds
-			logger.Info("Going to wait state for", s.BusyTimeout, "seconds")
+			childLogger.Printf("Going to wait state for %d seconds", s.BusyTimeout)
 			<-time.After(time.Duration(s.BusyTimeout) * time.Second)
 			continue
 		} else {
 			maxMsgs = int64(s.MaxHandlers - s.handlerCount)
-			logger.Info("Can accept a maximum of ", maxMsgs, "messages")
+			childLogger.Printf("Can accept a maximum of %d messages", maxMsgs)
 		}
 
 		result, err := s.svc.ReceiveMessage(&sqs.ReceiveMessageInput{
@@ -164,21 +162,21 @@ func (s *Config) Poll() {
 
 		// Retrieve error?
 		if err != nil {
-			logger.Error("ReceiveMessageError:", err)
+			childLogger.Println("ReceiveMessageError:", err)
 			break
 		}
 
 		// Message log
 		if len(result.Messages) == 0 {
-			logger.Info("Queue is empty")
+			childLogger.Println("Queue is empty")
 		} else {
-			logger.Info("Fetched", len(result.Messages), "messages")
+			childLogger.Printf("Fetched %d messages", len(result.Messages))
 		}
 
 		// Process messages
 		for _, msg := range result.Messages {
 			if s.pollHandler == nil {
-				logger.Error("No Poll handler registered. Register a handler for custom handling")
+				childLogger.Println("No Poll handler registered. Register a handler for custom handling")
 			} else {
 				s.handlerCount++
 				wg.Add(1)
@@ -190,18 +188,18 @@ func (s *Config) Poll() {
 				}(&wg, s)
 			}
 
-			logger.Debug("Spawned handler for", msg.MessageId)
+			childLogger.Printf("Spawned handler for %s", *msg.MessageId)
 		}
 
 		if s.RunOnce == true {
-			logger.Info(`Exiting since confugured to run once`)
+			childLogger.Println(`Exiting since confugured to run once`)
 			break
 		} else {
-			logger.Info("Waiting for ", s.RunInterval, "seconds before polling for next batch")
+			childLogger.Printf("Waiting for %d seconds before polling for next batch", s.RunInterval)
 			<-time.After(time.Duration(s.RunInterval) * time.Second)
 		}
 
-		logger.Info("Finished polling")
+		childLogger.Println("Finished polling")
 	}
 
 	wg.Wait()
@@ -210,18 +208,18 @@ func (s *Config) Poll() {
 // Enqueue messages to SQS
 func (s *Config) Enqueue(msgBatch []*sqs.SendMessageBatchRequestEntry) error {
 	if s.svc == nil {
-		s.logger.Fatal("No service connection")
+		logger.Fatal("No service connection")
 	}
 
-	s.logger.Info(len(msgBatch), `messages are processing`)
+	logger.Printf(`%d messages are processing`, len(msgBatch))
 
 	result, err := s.svc.SendMessageBatch(&sqs.SendMessageBatchInput{
 		QueueUrl: &s.URL,
 		Entries:  msgBatch,
 	})
 
-	s.logger.Info(len(result.Successful), ": Successfully Processed")
-	s.logger.Info(len(result.Failed), ": Failed to process")
+	logger.Printf("%d: Successfully Processed", len(result.Successful))
+	logger.Printf("%d: Failed to process", len(result.Failed))
 
 	return err
 }
@@ -245,10 +243,10 @@ func (s *Config) RegisterPollHandler(pollHandler func(msg *sqs.Message)) {
 // ChangeVisibilityTimeout : Method to change visibility timeout of a message.
 func (s *Config) ChangeVisibilityTimeout(msg *sqs.Message, seconds int64) bool {
 	retVal := false
-	s.logger.Info("ChangeVisibilityTimeout : ", sqs.Message.String(*msg))
+	logger.Printf("change visibility timeout for message ID %s", *msg.MessageId)
 
 	if s.svc == nil {
-		s.logger.Fatal("SQS Connection failed")
+		logger.Fatal("SQS Connection failed")
 		return retVal
 	}
 
@@ -263,11 +261,11 @@ func (s *Config) ChangeVisibilityTimeout(msg *sqs.Message, seconds int64) bool {
 
 	out, err := s.svc.ChangeMessageVisibility(&changeMessageVisibilityInput)
 
-	if err != nil {
-		s.logger.Fatal("Change visibility timeout failed", (*out).GoString())
-	} else {
-		s.logger.Info(" Return :", (*out).GoString())
+	if err == nil {
+		logger.Printf("changed visibility timeout success for %s", (*out).GoString())
 		retVal = true
+	} else {
+		logger.Printf("change visibility timeout failed: %s", (*out).GoString())
 	}
 
 	return retVal

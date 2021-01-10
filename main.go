@@ -17,8 +17,6 @@ func main() {
 
 	// Instantiate the queue with service connection
 	queue, _ := sqs.NewSQS(sqs.Config{
-		Verbosity: 0,
-
 		// aws config
 		AWSRegion:  env.AWSRegion,
 		MaxRetries: 10,

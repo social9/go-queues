@@ -69,7 +69,7 @@ type SQS interface {
 }
 
 // NewSQS Instantiate a SQS instance
-func NewSQS(opts Config) (SQS, error) {
+func NewSQS(opts Config) (*Config, error) {
 	// Validate parameters
 	validateErr := validateOpts(opts)
 	if validateErr != nil {
@@ -193,7 +193,7 @@ func (s *Config) Poll() {
 		}
 
 		if s.RunOnce == true {
-			childLogger.Println(`Exiting since confugured to run once`)
+			childLogger.Println(`Exiting since configured to run once`)
 			break
 		} else {
 			childLogger.Printf("Waiting for %d seconds before polling for next batch", s.RunInterval)
@@ -219,7 +219,7 @@ func (s *Config) Enqueue(msgBatch []*sqs.SendMessageBatchRequestEntry) error {
 		Entries:  msgBatch,
 	})
 
-	logger.Printf("Enque result: %d success, %d failed", len(result.Successful), len(result.Failed))
+	logger.Printf("Enqueue result: %d success, %d failed", len(result.Successful), len(result.Failed))
 	return err
 }
 

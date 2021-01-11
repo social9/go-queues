@@ -71,8 +71,7 @@ func main() {
 		time.Sleep(10 * time.Second)
 		log.Println("Finished:", *msg.MessageId)
 
-		// Send back to the queue
-		queue.ChangeVisibilityTimeout(msg, 0)
+		queue.Delete(msg)
 	})
 
 	// Poll from the SQS queue

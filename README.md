@@ -102,20 +102,7 @@ func getMessagesToEnque() []*awsSqs.SendMessageBatchRequestEntry {
 ## Setup
 
 - Clone the repo `git clone https://github.com/social9/go-queues`
-- Configurable environment variables
-  | Parameter              | Description  | Default | Allowed |
-  |------------------------|--------------|---------|---------|
-  |`AWS_ACCESS_KEY_ID`     |AWS Access Key|`""`|`string`|
-  |`AWS_SECRET_ACCESS_KEY` |AWS Access Secret|`""`|`string`|
-  |`AWS_REGION`            |The AWS region to establish service connection|`us-east-2`|`A valid AWS region`|
-  |`SQS_URL`               |The SQS endpoint to poll|`""`|`string`|
-  |`SQS_BATCH_SIZE`        |The maximum number of messages to receive per request|`10`|`1-10`|
-  |`SQS_WAIT_TIME`         |The maximum polling wait time in seconds|`20`|`0-20`|
-  |`SQS_VISIBILITY_TIMEOUT`|Visiblity timeout for a message after received in seconds|`20`|`0 - 12*60*60`|
-  |`RUN_ONCE`              |Run the service one-time or in intervals|`true`|`boolean`|
-  |`RUN_INTERVAL`          |Run the service in the defined interval. Works only when `RUN_ONCE` is set to `true`|`10`|`>0`|
-
-> Note: You can also load the env values from a file named `.env` stored in the root path
+- Create a development branch `git checkout -b new_development_branch origin/dev`
 
 ## Contribution Guidelines
 

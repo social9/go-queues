@@ -142,17 +142,16 @@ func (s *Config) Poll() {
 
 		maxMsgs := s.BatchSize
 		// Is running at capacity?
-		if s.MaxHandlers > 0 && s.handlerCount >= s.MaxHandlers {
+
+		for s.MaxHandlers > 0 && s.handlerCount >= s.MaxHandlers {
 			childLogger.Println("Reached max handler count")
 
 			// Since all handlers are busy, let's wait for BusyTimeout seconds
 			childLogger.Printf("Going to wait state for %d seconds", s.BusyTimeout)
 			<-time.After(time.Duration(s.BusyTimeout) * time.Second)
-			continue
-		} else {
-			maxMsgs = int64(s.MaxHandlers - s.handlerCount)
-			childLogger.Printf("Polling for a maximum of %d messages", maxMsgs)
 		}
+		maxMsgs = int64(s.MaxHandlers - s.handlerCount)
+		childLogger.Printf("Polling for a maximum of %d messages", maxMsgs)
 
 		result, err := s.svc.ReceiveMessage(&sqs.ReceiveMessageInput{
 			QueueUrl:            &s.URL,

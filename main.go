@@ -34,7 +34,7 @@ func main() {
 		// misc config
 		RunInterval: 20,
 		RunOnce:     env.RunOnce,
-		MaxHandlers: 10,
+		MaxHandlers: 100,
 		BusyTimeout: 30,
 	})
 

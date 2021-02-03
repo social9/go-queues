@@ -56,6 +56,7 @@ type Config struct {
 
 	svc          *sqs.SQS
 	handlerCount int
+	mutex        *sync.Mutex
 	pollHandler  func(msg *sqs.Message)
 }
 
@@ -122,6 +123,7 @@ func NewSQS(opts Config) (*Config, error) {
 	logger.Println("Connected to Queue")
 
 	opts.svc = svc
+	opts.mutex = &sync.Mutex{}
 	return &opts, nil
 }
 
@@ -141,16 +143,20 @@ func (s *Config) Poll() {
 		childLogger.Println("Start receiving messages")
 
 		maxMsgs := s.BatchSize
+
 		// Is running at capacity?
-
-		for s.MaxHandlers > 0 && s.handlerCount >= s.MaxHandlers {
-			childLogger.Println("Reached max handler count")
-
-			// Since all handlers are busy, let's wait for BusyTimeout seconds
-			childLogger.Printf("Going to wait state for %d seconds", s.BusyTimeout)
-			<-time.After(time.Duration(s.BusyTimeout) * time.Second)
+		if s.MaxHandlers > 0 {
+			for s.handlerCount >= s.MaxHandlers {
+				childLogger.Printf("Reached max handler count")
+				childLogger.Printf("Going to wait state for %d seconds", s.BusyTimeout)
+				<-time.After(time.Duration(s.BusyTimeout) * time.Second)
+			}
+			availableHandlers := int64(s.MaxHandlers - s.handlerCount)
+			if availableHandlers < maxMsgs {
+				maxMsgs = availableHandlers
+			}
 		}
-		maxMsgs = int64(s.MaxHandlers - s.handlerCount)
+
 		childLogger.Printf("Polling for a maximum of %d messages", maxMsgs)
 
 		result, err := s.svc.ReceiveMessage(&sqs.ReceiveMessageInput{
@@ -183,8 +189,12 @@ func (s *Config) Poll() {
 
 				go func(m *sqs.Message) {
 					s.pollHandler(m)
-					wg.Done()
+
+					s.mutex.Lock()
 					s.handlerCount--
+					s.mutex.Unlock()
+
+					wg.Done()
 				}(&(*msg))
 			}
 
